@@ -1,0 +1,5 @@
+.idea
+.DS_Store
+lib/*
+cmake-build-debug
+cmake-build-relase

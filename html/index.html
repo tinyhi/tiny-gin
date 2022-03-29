@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MyBlog</title>
+
+    <style>
+        html, body {
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f1f2f9;
+        }
+
+        .my_blog-header {
+            margin-top: 100px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .my_blog-header > .my_blog-header-sticky {
+            min-width: 990px;
+            float: left;
+        }
+
+        .my_blog-header > .my_blog-header-sticky > .my_blog-header-author {
+            background-color: #ffffff;
+            border-radius: 8px;
+            width: 400px;
+            padding: 15px 20px;
+            box-shadow: 0 2px 15px rgb(0 0 0 / 2%);
+        }
+
+        .my_blog-header > .my_blog-header-sticky > .my_blog-header-author .my_blog-header-author-name {
+            font-size: 30px;
+            color: #626a79;
+            font-weight: 400;
+        }
+
+        .my_blog-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .my_blog-body .my_blog-body-card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            width: 990px;
+            min-height: 200px;
+            box-shadow: 0 2px 15px rgb(0 0 0 / 2%);
+        }
+
+        .my_blog-body .my_blog-body-card .my_blog-body-card-body {
+            padding: 15px 20px;
+        }
+
+        .my_blog-body .my_blog-body-card {
+            margin-top: 18px;
+        }
+
+        .my_blog-body .my_blog-body-card:nth-child(1) {
+            margin-top: 0;
+        }
+
+        .my_blog-body .my_blog-body-card .my_blog-body-card-body .title {
+            font-size: 18px;
+            color: #626a79;
+            margin-bottom: 12px;
+            font-weight: 400;
+        }
+        .my_blog-body .my_blog-body-card .my_blog-body-card-body .content {
+            text-indent:2em;
+            color: #13171b;
+            font-weight: 200;
+        }
+    </style>
+</head>
+<body>
+<div class="my_blog-header">
+    <div class="my_blog-header-sticky">
+        <div class="my_blog-header-author">
+            <div>
+                <span class="my_blog-header-author-name">Welcome to Tinyle's Blog</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="my_blog-body">
+    <div class="my_blog-body-card">
+        <div class="my_blog-body-card-body">
+            <div class="title">TinyGin 路由系统设计</div>
+            <section class="content">
+                使用单向链表形查找路由，每一个请求都生成一个全新的上下文 context 隔离环境，这样设计的目的是为了以后加入多线程做基础的支持,
+                接下来需要设计中间件，第一个中间件应该是 recovery，设计此中间的目的是为了程序在运行到无法恢复的错误中后，能够自行恢复，使得整体的服务变得更加健壮。
+            </section>
+        </div>
+    </div>
+
+    <div class="my_blog-body-card">
+        <div class="my_blog-body-card-body">
+
+        </div>
+    </div>
+
+    <div class="my_blog-body-card">
+        <div class="my_blog-body-card-body">
+
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
