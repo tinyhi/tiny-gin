@@ -6,6 +6,7 @@
 #ifndef TINY_GIN_H
 #define TINY_GIN_H
 
+#include <regex.h>
 #include "thirdpard/http_parser/http_parser.h"
 
 typedef enum {
@@ -51,6 +52,8 @@ typedef struct {
     size_t handle_funcs_n;
     size_t handle_funcs_exec_n;
     void *s_closure;
+    regmatch_t *s_url_regmatch;
+    size_t s_url_regmatch_n;
 } tiny_gin_context;
 
 typedef void (*tiny_gin_handle_func)(tiny_gin_context *);
@@ -89,7 +92,7 @@ void tiny_gin_get(tiny_gin_router_group *s_router_group, const char *path, tiny_
 
 void tiny_gin_post(tiny_gin_router_group *s_router_group, const char *path, tiny_gin_handle_func s_handle_func);
 
-int tiny_gin_static_dir(tiny_gin_router_group *s_router_group, const char *relative_path, const char *root);
+//int tiny_gin_static_dir(tiny_gin_router_group *s_router_group, const char *relative_path, const char *root);
 
 void tiny_gin_run(int receive_fd, tiny_gin_engine *s_engine);
 

@@ -10,6 +10,10 @@ void handle_myblog(tiny_gin_context *ctx) {
 }
 
 void init_router_myblog(tiny_gin_router_group *s_router_group) {
+
+    // 设置静态目录
+    tiny_gin_static_dir(s_router_group,"/static", "./static");
+
     tiny_gin_get(s_router_group, "/myblog", handle_myblog);
 }
 

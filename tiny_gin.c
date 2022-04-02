@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <string.h>
+#include <regex.h>
 #include "tiny_gin.h"
 
 #define RECEIVE_BUF_N 80 * 1024
@@ -37,7 +38,8 @@ int request_message_complete(http_parser *parser) {
 int request_url_cb(http_parser *parser, const char *buf, size_t n) {
     tiny_gin_context *ctx;
     ctx = (tiny_gin_context *)(parser->data);
-    ctx->url = malloc(sizeof(char) * n);
+    ctx->url = malloc(sizeof(char) * n + 1) ;
+    memset(ctx->url, '\0', n + 1);
     memcpy(ctx->url, buf, n);
     ctx->url_n = n;
     return 0;
@@ -84,9 +86,10 @@ tiny_gin_handle_func *combine_handlers(tiny_gin_router_group *s_router_group, ti
     return new_handle_funcs;
 }
 
-char *calculate_absolute_path(char *prefix, size_t prefix_n, char *other, size_t other_n) {
+char *calculate_url_absolute_path(char *prefix, size_t prefix_n, char *other, size_t other_n) {
     char *new_absolute_path;
-    new_absolute_path = malloc(sizeof(char*) * (prefix_n + other_n));
+    new_absolute_path = malloc((prefix_n + other_n) + 1);
+    memset(new_absolute_path, '\0', (prefix_n + other_n) + 1);
     memcpy(new_absolute_path, prefix, prefix_n);
     memcpy(new_absolute_path + prefix_n, other, other_n);
     return new_absolute_path;
@@ -115,7 +118,7 @@ void recycled_router_group(tiny_gin_engine *s_engine) {
 tiny_gin_router_group *tiny_gin_group(tiny_gin_router_group *s_router_group, char *path, size_t path_n) {
     tiny_gin_router_group *new_router_group;
     new_router_group = malloc(sizeof(tiny_gin_router_group));
-    new_router_group->path = calculate_absolute_path(s_router_group->path, s_router_group->path_n, path, path_n);
+    new_router_group->path = calculate_url_absolute_path(s_router_group->path, s_router_group->path_n, path, path_n);
     new_router_group->path_n = s_router_group->path_n + path_n;
     new_router_group->handle_funcs_n = s_router_group->handle_funcs_n;
     new_router_group->handle_funcs = s_router_group->handle_funcs;
@@ -137,6 +140,7 @@ void tiny_gin_use(tiny_gin_router_group *s_router_group, tiny_gin_handle_func s_
 }
 
 void add_engine(tiny_gin_router_group *s_router_group) {
+    // 可以使用redix 树 替换链表
     tiny_gin_router_node *new_tree_node;
     tiny_gin_engine *s_engine;
 
@@ -150,31 +154,36 @@ void add_engine(tiny_gin_router_group *s_router_group) {
 }
 
 void _tiny_gin_static_handle_func (tiny_gin_context *ctx) {
+    char absolute_file[2048] = {'\0'};
     _tiny_gin_closure_static_dir *closure;
+
     closure = (_tiny_gin_closure_static_dir *)ctx->s_closure;
-    // TODO: 实现文件读取
+    regmatch_t *s_regmatch = ctx->s_url_regmatch + (ctx->s_url_regmatch_n - 1);
+    memcpy(absolute_file, closure->absolute_path, closure->absolute_path_n);
+    *(absolute_file + closure->absolute_path_n) = '/';
+    memcpy(absolute_file + closure->absolute_path_n + 1, ctx->url + s_regmatch->rm_so, s_regmatch->rm_eo - s_regmatch->rm_so);
+
+    // TODO: 读取文件写入到socket中
 }
 
 int tiny_gin_static_dir(tiny_gin_router_group *s_router_group, const char *relative_path, const char *root) {
-    char pattern_path[strlen(relative_path) + 2];
+    char pattern_path[strlen(relative_path) + 22];
     char *absolute_path;
     _tiny_gin_closure_static_dir *s_closure;
-
 
     // 计算静态目录
     absolute_path = malloc(sizeof(char) * 1024);
     memset(absolute_path, '\0', 1024);
-    if(calculate_fs_absolute_path(relative_path, strlen(relative_path), absolute_path, 1024) != -1) {
+    if(calculate_fs_absolute_path(root, strlen(root), absolute_path, 1024) == -1) {
         return -1;
     }
     s_closure = malloc(sizeof(_tiny_gin_closure_static_dir));
     s_closure->absolute_path = absolute_path;
     s_closure->absolute_path_n = strlen(absolute_path);
+    memset(pattern_path, '\0', strlen(relative_path) + 22);
+    sprintf(pattern_path, "%s/([A-Za-z0-9_\\.]+){1}", relative_path);
 
-    sprintf(pattern_path, "%s\\*", relative_path);
-
-
-    tiny_gin_get(s_router_group, pattern_path, _tiny_gin_static_handle_func);
+    tiny_gin_any(s_router_group, GET, pattern_path, _tiny_gin_static_handle_func, s_closure);
     return 1;
 }
 
@@ -185,7 +194,8 @@ void tiny_gin_any(tiny_gin_router_group *s_router_group, tiny_gin_method s_metho
     relative_path_n = strlen(relative_path);
     new_router_group = malloc(sizeof(tiny_gin_router_group));
     new_router_group->method = s_method;
-    new_router_group->path = calculate_absolute_path(s_router_group->path, s_router_group->path_n, (char *)relative_path, relative_path_n);
+    new_router_group->path = calculate_url_absolute_path(s_router_group->path, s_router_group->path_n,
+                                                         (char *) relative_path, relative_path_n);
     new_router_group->path_n = s_router_group->path_n + relative_path_n;
     new_router_group->handle_funcs_n = s_router_group->handle_funcs_n + 1;
     new_router_group->handle_funcs = combine_handlers(s_router_group, s_handle_func);
@@ -210,15 +220,34 @@ int find_router(tiny_gin_context *ctx, tiny_gin_engine *s_engine) {
     router_node = s_engine->router_trees;
     while (router_node != 0){
         router_group = router_node->s_router_group;
-        if (memcmp(ctx->url, router_group->path, ctx->url_n) == 0 && ctx->method == router_group->method) {
+        // 请求方法匹配
+        if (ctx->method != router_group->method) {
+            router_node = router_node->next;
+            continue;
+        }
+
+        int regex_result;
+        regex_t regex;
+        size_t  regmatch_n = 2;
+        regmatch_t regmatch[regmatch_n];
+
+        // 正则匹配支持
+        regcomp(&regex, router_group->path, REG_EXTENDED);
+        regex_result = regexec(&regex, ctx->url, regmatch_n, regmatch, 0);
+        if (regex_result == 0) {
             ctx->handle_funcs = malloc(sizeof(tiny_gin_handle_func) * router_group->handle_funcs_n);
             memcpy(ctx->handle_funcs, router_group->handle_funcs, sizeof(tiny_gin_handle_func) * router_group->handle_funcs_n);
             ctx->handle_funcs_n = router_group->handle_funcs_n;
             ctx->s_closure = router_group->s_closure;
+            ctx->s_url_regmatch_n = regmatch_n;
+            ctx->s_url_regmatch = malloc(sizeof(regmatch_t) * regmatch_n);
+            memcpy(ctx->s_url_regmatch, regmatch, sizeof(regmatch_t) * regmatch_n);
+            regfree(&regex);
             return 1;
         } else {
             router_node = router_node->next;
         }
+        regfree(&regex);
     }
     return -1;
 }
@@ -404,6 +433,8 @@ void tiny_gin_run(int receive_fd, tiny_gin_engine *s_engine) {
         }
     }
     free(receive_buf);
+    free(ctx->handle_funcs);
+    free(ctx->s_url_regmatch);
     free(ctx);
     free(parser);
 }
